@@ -89,206 +89,301 @@ const formattedData = bodyData.map((d, i) => {
 	}
 })
 
+type Point = {
+  x: number;
+  y: number;
+};
+
 function App() {
-	const ref = useRef<HTMLCanvasElement>(null)
-	const [data, setData] = useState<Data[]>(formattedData)
-	const mouseDown = useRef<boolean>(false)
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [data, setData] = useState<Data[]>(formattedData);
+  const mouseDown = useRef<boolean>(false);
+  const mouseClickPosition = useRef<Point>({ x: 0, y: 0 });
+  const mouseMovePosition = useRef<Point>({ x: 0, y: 0 });
+  const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
 
-	useEffect(() => {
-		if (ref.current) {
-			const cxt = ref.current.getContext("2d")
+  const reOffset = () => {
+    if (ref.current === null) return;
+    const canvas = ref.current;
 
-			// clear the canvas
+    const BB = canvas.getBoundingClientRect();
 
-			const drawCircleAndLine = (dataList: Data[]) => {
-				if (cxt) {
-					dataList.forEach((item) => {
-						const bodyPartId = item.bodyPart
+    console.log("BB", BB.left, BB.right);
 
-						// draw a circle
-						cxt.beginPath()
-						cxt.arc(item.x, item.y, 5, 0, 2 * Math.PI)
-						cxt.fillStyle = "palevioletred"
-						cxt.fill()
-						cxt.lineWidth = 1
-						cxt.strokeStyle = "palevioletred"
+    setOffset({
+      x: BB.left,
+      y: BB.top,
+    });
+  };
 
-						cxt.closePath()
+  const draw = (cxt: CanvasRenderingContext2D, frameCount: number) => {
+    // Clear the canvas
+    cxt.clearRect(0, 0, cxt.canvas.width, cxt.canvas.height);
+    cxt.strokeStyle = "palevioletred";
+    cxt.fillStyle = "palevioletred";
+    cxt.lineWidth = 1;
 
-						// Add body part number to the circle
-						// cxt.font = "20px system-ui"
-						// cxt.fillStyle = "black"
-						// cxt.fillText(bodyPartId.toString(), data.x - 5, data.y + 5)
+    data.forEach((item) => {
+      drawCircle(item, cxt);
+      drawLineBetweenPoints(item, data, cxt);
+    });
+  };
 
-						// find the connections for this body part
-						const connections = bodyParts.find(
-							(part) => part.id === bodyPartId
-						)?.connects
-						console.log("connections", connections)
+  /**
+   * Handle drawing the circle before filling it in
+   * @param item Data
+   * @param cxt CanvasRenderingContext2D
+   */
+  const drawCircle = (item: Data, cxt: CanvasRenderingContext2D) => {
+    const circle = new Path2D();
+    circle.arc(item.x, item.y, 5, 0, 2 * Math.PI);
 
-						// draw a line to each connection
-						if (connections) {
-							connections.forEach((connection) => {
-								const connectionData = dataList.find(
-									(d) => d.bodyPart === connection
-								)
+    const mouseOver = cxt.isPointInPath(
+      circle,
+      mouseClickPosition.current.x,
+      mouseClickPosition.current.y
+    );
 
-								if (connectionData) {
-									console.log("connectionData", connectionData)
+    if (mouseOver) {
+      cxt.fillStyle = "green";
+    } else {
+      cxt.fillStyle = "palevioletred";
+    }
+    cxt.fill(circle);
+  };
 
-									cxt.beginPath()
-									cxt.moveTo(item.x, item.y)
-									cxt.lineTo(connectionData.x, connectionData.y)
-									cxt.strokeStyle = "lightblue"
-									cxt.stroke()
-									cxt.closePath()
-								}
-							})
-						}
-					})
-				}
-			}
+  const drawLineBetweenPoints = (
+    item: Data,
+    dataList: Data[],
+    cxt: CanvasRenderingContext2D
+  ) => {
+    const bodyPartId = item.bodyPart;
 
-			if (cxt) {
-				// Clear all canvas
-				cxt.clearRect(0, 0, ref.current.width, ref.current.height)
-			}
-			drawCircleAndLine(data)
-		}
+    // draw a circle
 
-		return () => {}
-	}, [ref, data])
+    // Add body part number to the circle
+    // cxt.font = "20px system-ui"
+    // cxt.fillStyle = "black"
+    // cxt.fillText(bodyPartId.toString(), data.x - 5, data.y + 5)
 
-	const onFilter = (id: number | string) => {
-		if (typeof id === "string") {
-			id = parseInt(id)
-		}
+    // find the connections for this body part
+    const connections = bodyParts.find(
+      (part) => part.id === bodyPartId
+    )?.connects;
+    // console.log("connections", connections);
 
-		const connections = bodyParts.find((part) => part.id === id)?.connects
+    // draw a line to each connection
+    if (connections) {
+      connections.forEach((connection) => {
+        const connectionData = dataList.find((d) => d.bodyPart === connection);
 
-		if (connections && (connections?.length ?? 0) > 0) {
-			const newData = formattedData.filter((d) =>
-				connections.includes(d.bodyPart)
-			)
-			console.log("newData", newData)
-			setData(newData)
-		} else {
-			const newData = formattedData.filter((d) => d.bodyPart === id)
-			setData(newData)
-		}
-	}
+        if (connectionData) {
+          // console.log("connectionData", connectionData);
 
-	const movePoint = (id: number | string, x: number, y: number) => {
-		if (typeof id === "string") {
-			id = parseInt(id)
-		}
+          cxt.beginPath();
+          cxt.moveTo(item.x, item.y);
+          cxt.lineTo(connectionData.x, connectionData.y);
+          cxt.strokeStyle = "lightblue";
+          cxt.stroke();
+          cxt.closePath();
+        }
+      });
+    }
+  };
 
-		const newData = data.map((d) => {
-			if (d.bodyPart === id) {
-				return {
-					...d,
-					x: x,
-					y: y,
-				}
-			}
-			return d
-		})
-		setData(newData)
-	}
+  const onFilter = (id: number | string) => {
+    if (typeof id === "string") {
+      id = parseInt(id);
+    }
 
-	const handleMouseDown = (
-		e: React.MouseEvent<HTMLCanvasElement, MouseEvent>
-	) => {
-		// Do nothing
+    const connections = bodyParts.find((part) => part.id === id)?.connects;
 
-		e.preventDefault()
-		e.stopPropagation()
+    if (connections && (connections?.length ?? 0) > 0) {
+      const newData = formattedData.filter((d) =>
+        connections.includes(d.bodyPart)
+      );
+      console.log("newData", newData);
+      setData(newData);
+    } else {
+      const newData = formattedData.filter((d) => d.bodyPart === id);
+      setData(newData);
+    }
+  };
 
-		console.log("evt", e)
+  const movePoint = (id: number | string, x: number, y: number) => {
+    if (typeof id === "string") {
+      id = parseInt(id);
+    }
 
-		if (ref.current) {
-			const ctx = ref.current.getContext("2d")
-			if (ctx) {
-				const x = e.clientX - ref.current.offsetLeft
-				const y = e.clientY - ref.current.offsetTop
+    const newData = data.map((d) => {
+      if (d.bodyPart === id) {
+        return {
+          ...d,
+          x: x,
+          y: y,
+        };
+      }
+      return d;
+    });
+    setData(newData);
+  };
 
-				const data = formattedData.find((d) => {
-					const dx = Math.abs(d.x - x)
-					const dy = Math.abs(d.y - y)
-					return dx < 10 && dy < 10
-				})
+  function handleMouseMove(e: any) {
+    e.preventDefault();
+    e.stopPropagation();
 
-				if (data) {
-					console.log("data", data)
-					movePoint(data.bodyPart, x, y)
-				}
-			}
-		}
+    // @ts-ignore
+    const mouseX = parseInt(e.clientX - offset?.x);
+    // @ts-ignore
+    const mouseY = parseInt(e.clientY - offset?.y);
 
-		const x = e.clientX
-		const y = e.clientY
-	}
+    if (mouseDown.current) {
+      mouseClickPosition.current = {
+        x: mouseX,
+        y: mouseY,
+      };
+    } else {
+      mouseMovePosition.current = {
+        x: mouseX,
+        y: mouseY,
+      };
+    }
+  }
 
-	return (
-		<Row
-			style={{
-				minHeight: "100vh",
-				display: "flex",
-				justifyContent: "center",
-				alignItems: "center",
-				textAlign: "center",
-			}}
-		>
-			<div>
-				<Select onChange={(v) => onFilter(v)}>
-					{/* Generate an array from 0 - 32 */}
-					{Array.from(Array(32).keys()).map((i) => (
-						<Select.Option key={i} value={i}>
-							{i}
-						</Select.Option>
-					))}
-				</Select>
-			</div>
-			<div style={{ width: "100vw" }}>
-				<h2 style={{ marginBottom: "2rem" }}>Image positing test</h2>
+  const handleMouseDown = (e: any) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-				<div>
-					<div
-						style={{
-							position: "relative",
-							display: "inline-block",
-							width: image.width,
-							height: image.height,
-						}}
-					>
-						<img
-							style={{
-								position: "absolute",
-								top: 0,
-								left: 0,
-								width: "100%",
-								height: "100%",
-							}}
-							src={"input_image.jpeg"}
-							className=''
-							alt='test points'
-						/>
-						<canvas
-							style={{
-								position: "absolute",
-								zIndex: 10,
-								top: 0,
-								left: 0,
-							}}
-							ref={ref}
-							width={image.width}
-							height={image.height}
-						></canvas>
-					</div>
-				</div>
-			</div>
-		</Row>
-	)
+    mouseDown.current = true;
+    mouseClickPosition.current = { x: e.clientX, y: e.clientY };
+
+    // if (ref.current) {
+    //   const ctx = ref.current.getContext("2d");
+    //   if (ctx) {
+    //     const x = e.clientX - ref.current.offsetLeft;
+    //     const y = e.clientY - ref.current.offsetTop;
+
+    //     const data = formattedData.find((d) => {
+    //       const dx = Math.abs(d.x - x);
+    //       const dy = Math.abs(d.y - y);
+    //       return dx < 10 && dy < 10;
+    //     });
+
+    //     if (data) {
+    //       console.log("data", data);
+    //       movePoint(data.bodyPart, x, y);
+    //     }
+    //   }
+    // }
+
+    // const x = e.clientX;
+    // const y = e.clientY;
+  };
+
+  useEffect(() => {
+    if (!ref.current) return;
+    reOffset();
+  }, [ref]);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (!data) return;
+
+    document.addEventListener("onscroll", reOffset);
+    ref.current.addEventListener("mousemove", handleMouseMove);
+    // canvas.addEventListener('click', handleMouseClick)
+    ref.current.addEventListener("mousedown", handleMouseDown);
+    // canvas.addEventListener('mouseup', handleMouseUp)
+
+    const cxt = ref.current.getContext("2d");
+    let frameCount = 0;
+    let animationFrameId: any;
+    let lastFrameTime = 0;
+    const fps = 20;
+    const frameTime = (1000 / 60) * (60 / fps) - (1000 / 60) * 0.5;
+
+    const render = (time: number) => {
+      if (time - lastFrameTime < frameTime) {
+        animationFrameId = window.requestAnimationFrame(render);
+        return;
+      }
+      frameCount++;
+      lastFrameTime = time;
+      // @ts-expect-error
+      draw(cxt, frameCount);
+      animationFrameId = window.requestAnimationFrame(render);
+    };
+    animationFrameId = window.requestAnimationFrame(render);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      document.removeEventListener("onscroll", reOffset);
+      if (!ref.current) return;
+      ref.current.removeEventListener("mousemove", handleMouseMove);
+      ref.current.addEventListener("mousedown", handleMouseDown);
+    };
+  }, [ref, data, offset]);
+
+  return (
+    <Row
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        textAlign: "center",
+      }}
+    >
+      <div>
+        <Select onChange={(v) => onFilter(v)}>
+          {/* Generate an array from 0 - 32 */}
+          {Array.from(Array(32).keys()).map((i) => (
+            <Select.Option key={i} value={i}>
+              {i}
+            </Select.Option>
+          ))}
+        </Select>
+      </div>
+      <div style={{ width: "100vw" }}>
+        <h2 style={{ marginBottom: "2rem" }}>Image positing test</h2>
+
+        <div>
+          <div
+            style={{
+              position: "relative",
+              display: "inline-block",
+              width: image.width,
+              height: image.height,
+            }}
+          >
+            <img
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+              }}
+              src={"input_image.jpeg"}
+              className=""
+              alt="test points"
+            />
+            <canvas
+              style={{
+                position: "absolute",
+                zIndex: 10,
+                top: 0,
+                left: 0,
+              }}
+              ref={ref}
+              width={image.width}
+              height={image.height}
+            ></canvas>
+          </div>
+        </div>
+      </div>
+    </Row>
+  );
 }
 
 export default App
